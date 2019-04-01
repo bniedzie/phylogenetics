@@ -1,0 +1,351 @@
+---
+title: "IE Phylogeny Based on Negation Characters"
+author: "Benjamin Niedzielski"
+date: "12/4/2018"
+output: 
+  pdf_document:
+    latex_engine: lualatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(phangorn) #Imports ape as well
+library(tidyverse)
+library(ggtree)
+library(kableExtra)
+```
+
+#Introduction
+I have examined the languages in the Ringe data set based on how they do word- and clause-level negation.
+The results look promising, particularly for lower-order clades, but higher-order clades seem to be driven
+primarily by the presence or absence of \textit{*meh\textsubscript{2}} in prohibitions.
+
+#Characters
+I have produced 10 characters, taking inspriration in part from the World Atlas of Language Structures (WALS).
+Each is given below with the possible values.
+
+\begin{enumerate}
+\item \texttt{Word Level Affix Negation} - How does the language primarily negate individual words lexically?\\0 = prefix of syllabic \textit{n}; 1 = prefix of the clausal negative (\textit{ne-}).
+\item \texttt{Verbal Privatives in *\textit{-to}} - Does the language have a morphological mechanism for creating privatives to verbs using a suffix of \textit{*-to}?\\0 = no; 1 = yes.
+\item \texttt{Genitive of Negation} - Do animate direct objects of transitive negated verbs go in the genitive case rather than the accusative?\\0 = no; 1 = yes, obligatorily; 2 = yes, optionally or rarely.
+\item \texttt{Double Negatives} - How does the language handle double negatives?\\0 = cancel each other to make a positive; 1 = each item that can be negated must be, creating a negative; 2 = treatments 0 and 1 are possible depending on the specific context; 3 = treatments 0 and 1 are allowed optionally or depending on dialect.
+\item \texttt{Negative Indefinite Pronouns} - Does the language have various negative indefinite pronouns distinct from the positive ones?\\0 = no; 1 = yes.
+\item \texttt{Clause-level Simple Negatives} - What is the source of the negation used in simple clauses?\\0 = \textit{*-meh\textsubscript{2}}; 1 = \textit{*ne-}.
+\item \texttt{Clause-level Prohibitions} - What is the source of the negation used in prohibitives?\\0 = \textit{*-meh\textsubscript{2}}; 1 = \textit{*ne-}.
+\item \texttt{Verbs Negated with Prefix} - When negating a verb in a clause, is a negative prefix generally used?\\0 = no; 1 = only on participles; 2 = yes.
+\item \texttt{Negative Position} - In clause-level negations, where does the negative normally go?\\0 = preverbal; 1 = preverbal or sentence-initial; 2 = post-verbal.
+\item \texttt{Special Negation in Dependent Clauses} - Is the negative word used mandatorily different in dependent clauses?\\0 = no; 1 = yes.
+\end{enumerate}
+These characters have been chosen to consider morphology, lexicon, and syntax.  Some denote peculiar features of specific branches, while others are more broad in scope.
+
+#Data
+I have collected the data shown in table 1 for these characters.  Note that, as in the Ringe data set, I have used a large number for unknown quantities, here \texttt{9}.\footnote{Provided that this number is more than 1 more than the largest possible character value, \texttt{phangorn} knows to treat it as an unknown.}
+```{r import_data, include=FALSE}
+#Import the file and make a data frame
+screened <- "NegData.txt"
+
+screened.df <- read.table(screened, header=T,
+   row.names=2,
+   fill=TRUE,
+   stringsAsFactors = FALSE,
+   nrow=10)
+screened.df <- screened.df[, -c(1)]
+```
+```{r show_data, echo=FALSE}
+#Display the data as a LaTeX table, transposed for space reasons
+knitr::kable(t(screened.df), format = "latex",
+   escape=FALSE,
+   booktabs=TRUE,
+   caption = "Negation Dataset") %>%
+   kable_styling(latex_options = c("striped", "hold_position"))
+```
+Some notes on this data:
+\begin{itemize}
+\item Luvian \textit{niwalla} `innocent' is likely an instance of the negative attached as a prefix to form a lexical negative, but the etymology is disputed.
+\item Latin seems to use both the syllabic nasal and the negative \textit{ne-} for lexical negation (for instance, \textit{nefas} `not right').  However, the former is far more prolific.  Perhaps its own category would be more appropriate.
+\item Middle Welsh develops mandatory double negation akin to French but lacks it at its earliest stages.
+\item It has been proposed that Greek an Armenian's simple clausal negations are related to each other, and further proposed that they come from phrases related to \textit{*ne-}.  Since it has not been agreed upon, I have entered them as uncertain.
+\item It has been proposed that Hittite's prohibitive \textit{le:} is from \textit{ne:} or \textit{me:}, with a sound change similar to that in \textit{laman} `name'.  This is not agreed upon, so I have entered it as uncertain.
+\end{itemize}
+
+#Results
+I used this data to form trees based on the Pratchet-NNI, Hamming UPGMA, Hamming Neighbor Joining, and Maximum Likelihood Estimation methods.  For methods that required an outgroup, I have outgrouped Albanian, as my data didn't guarantee an Anatolian subgroup every time.
+
+Due to the large number of branches and small number of characters, Branch-and-Bound caused RStudio to crash and so is not represented here.
+
+```{r treegen, include=FALSE}
+#Add branch names
+names(screened.df) <- c("Hitt.","Arm.","Gk.","Alb.",
+   "TochB", "Ved.", "Av.",
+   "OCS", "Lith.",
+   "OEng", "OIr", "Latin",
+   "Luv.", "Lyc.", "TochA",
+   "OPers", "OPruss",
+   "Latv.","Goth.", "ONorse",
+   "OHG", "Welsh",
+   "Osc.", "Umbr.")
+albanian = "Alb."
+#9 represents unknown data
+screened.codings <- c(0:4, 9)
+screened.phydat <- phyDat(screened.df,type="USER",levels=screened.codings,
+   names=names(screened.df))
+
+#Pratchet
+screened.pratchet <- pratchet(screened.phydat, trace = 0)
+screened.pratchet.blength <- root(screened.pratchet,
+   outgroup = albanian, resolve.root = TRUE)
+   screened.pratchet.blength <- acctran(screened.pratchet.blength,
+   screened.phydat)
+   
+#NNI branch lengths
+screened.blength.nni <-
+   optim.parsimony(screened.pratchet.blength,screened.phydat)
+screened.nni.rooted <-
+  root(screened.blength.nni,outgroup = albanian, resolve.root = TRUE)
+screened.nni.rooted.blength <- acctran(screened.nni.rooted,screened.phydat)
+
+#NNI Bootstrap
+screened.df.tposed <- t(screened.df)
+phylo.pratchet.fun <- function (x) {root(pratchet(as.phyDat(x, type = "USER", levels = screened.codings)), outgroup = albanian, resolve.root = TRUE)}
+screened.pratchet.bphylo <- boot.phylo(screened.pratchet,
+  screened.df.tposed,
+  phylo.pratchet.fun, B = 100,
+  trees = TRUE, rooted = TRUE)
+screened.pratchet.bphylo.part <- prop.part(screened.pratchet.bphylo$trees)
+screened.pratchet.bphylo.clades <- prop.clades(screened.pratchet.blength, part = screened.pratchet.bphylo.part, rooted = TRUE)
+screened.pratchet.bphylo.rooted <- root.multiPhylo(screened.pratchet.bphylo$trees,
+  outgroup = albanian,
+  resolve.root = TRUE)
+scores.pratchet.bphylo <- prop.clades(screened.pratchet.blength, screened.pratchet.bphylo.rooted)
+
+#UPGMA
+screened.hamming <- dist.hamming(screened.phydat)
+screened.hamming.upgma <- upgma(screened.hamming)
+
+#UPGMA Bootstrap
+upgma.function <- function (x) {upgma(dist.hamming(as.phyDat(x,
+  type="USER",levels=screened.codings,
+  names=names(x))))}
+screened.hamming.upgma.bphy <- boot.phylo(screened.hamming.upgma,
+  screened.df.tposed,
+  FUN = upgma.function,
+  B = 100, trees = TRUE,
+  rooted = TRUE)
+screened.hamming.upgma.bphy.part <- prop.part(screened.hamming.upgma.bphy$trees)
+screened.hamming.upgma.bphy.clades <- prop.clades(screened.hamming.upgma,
+  part=screened.hamming.upgma.bphy.part,
+  rooted = TRUE)
+
+
+#Neighbor Joining
+screened.hamming.nj <- NJ(screened.hamming)
+screened.hamming.nj.rooted <- root(screened.hamming.nj,
+   outgroup = albanian, resolve.root = TRUE)
+
+#NJ Bootstrap
+nj.function <- function (x) {root(nj(dist.hamming(as.phyDat(x,type="USER",
+  levels=screened.codings,
+  names=names(x)))), outgroup = albanian, resolve.root = TRUE)}
+screened.hamming.nj.bphy <- boot.phylo(screened.hamming.nj,
+  screened.df.tposed,
+  FUN = nj.function,
+  B = 100, trees = TRUE, rooted = TRUE)
+screened.hamming.nj.bphy.part <- prop.part(screened.hamming.nj.bphy$trees)
+screened.hamming.nj.bphy.clades <- prop.clades(screened.hamming.nj.rooted,
+  part=screened.hamming.nj.bphy.part,
+  rooted = TRUE)
+
+#MLE
+screened.pratchet.pml <- pml(screened.pratchet.blength,
+  screened.phydat)
+screened.hamming.upgma.pml <- pml(screened.hamming.upgma,
+  screened.phydat)
+screened.hamming.nj.pml <- pml(screened.hamming.nj,
+  screened.phydat)
+
+#Optimize MLE
+screened.pratchet.opt <- optim.pml(screened.pratchet.pml,
+  optEdge = TRUE, rearrangement = "stochastic")
+screened.pratchet.opt.rooted <- root(screened.pratchet.opt$tree,
+  outgroup = albanian, resolve.root = TRUE)
+screened.hamming.upgma.opt <- optim.pml(screened.hamming.upgma.pml,
+  optEdge = TRUE, rearrangement = "stochastic")
+screened.hamming.upgma.opt.rooted <- root(screened.hamming.upgma.opt$tree,
+  outgroup = albanian, resolve.root = TRUE)
+screened.hamming.nj.opt <- optim.pml(screened.hamming.nj.pml,
+  optEdge = TRUE, rearrangement = "stochastic")
+screened.hamming.nj.opt.rooted <- root(screened.hamming.nj.opt$tree,
+  outgroup = albanian, resolve.root = TRUE)
+
+#MLE bootstrapping
+#screened.pratchet.opt.bs <- bootstrap.pml(screened.pratchet.opt,
+#  bs=10, optBf = TRUE, optEdge = TRUE, optNni = TRUE,
+#  multicore = TRUE, trees = TRUE)
+#screened.hamming.upgma.opt.bs <- bootstrap.pml(screened.hamming.upgma.opt,
+#  bs=10, optBf = TRUE, optEdge = TRUE, optNni = TRUE,
+#  multicore = TRUE, trees = TRUE)
+#screened.hamming.nj.opt.bs <- bootstrap.pml(screened.hamming.nj.opt,
+#  bs=10, optBf = TRUE, optEdge = TRUE, optNni = TRUE,
+#  multicore = TRUE, trees = TRUE)
+
+#screened.pratchet.opt.bs.part <- prop.part(screened.pratchet.opt.bs$trees)
+#screened.pratchet.opt.bs.clades <- prop.clades(screened.pratchet.opt,
+#  part=screened.pratchet.opt.bs.part,
+#  rooted = TRUE)
+#screened.hamming.upgma.opt.bs.part <- prop.part(screened.hamming.upgma.opt.bs$trees)
+#screened.hamming.upgma.opt.bs.clades <- prop.clades(screened.hamming.upgma.opt,
+#  part=screened.hamming.upgma.opt.bs.part,
+#  rooted = TRUE)
+#screened.hamming.nj.opt.bs.part <- prop.part(screened.hamming.nj.opt.bs$trees)
+#screened.hamming.nj.opt.bs.clades <- prop.clades(screened.hamming.nj.opt,
+#  part=screened.hamming.nj.opt.bs.part,
+#  rooted = TRUE)
+
+#Make MLE trees
+mp.ratchet.tr <- ggtree(screened.pratchet.opt.rooted) +
+  theme_tree() + 
+  geom_tiplab(size=3, vjust=-0.3, hjust=1) +
+  ggtitle("MLE tree starting from Pratchet") +
+  #geom_nodelab(aes(x=branch), label=screened.pratchet.bs.clades,
+  #              vjust=-0.3, hjust=0.6, size=4) +
+  theme(text=element_text(size=5))
+upgma.tr <- ggtree(screened.hamming.upgma.opt.rooted) +
+  theme_tree() + 
+  geom_tiplab(size=3, vjust=-0.3, hjust=1) +
+  ggtitle("MLE tree starting from UPGMA") +
+  #geom_nodelab(aes(x=branch), label=screened.hamming.upgma.bs.clades,
+  #              vjust=-0.3, hjust=0.6, size=4) +
+  theme(text=element_text(size=5))
+nj.tr <- ggtree(screened.hamming.nj.opt.rooted) +
+  theme_tree() + 
+  geom_tiplab(size=3, vjust=-0.3, hjust=1) +
+  ggtitle("MLE tree starting from NJ") +
+  #geom_nodelab(aes(x=branch), label=screened.hamming.nj.bs.clades,
+  #              vjust=-0.3, hjust=0.6, size=4) +
+  theme(text=element_text(size=5))
+
+#Use a gamma MLE model
+screened.pratchet.pml.varr <- pml(screened.pratchet.blength,
+  screened.phydat, rate = 0.1, k = 3, shape = 0.5)
+screened.hamming.upgma.pml.varr <- pml(screened.hamming.upgma,
+  screened.phydat, rate = 0.1, k = 3, shape = 0.5)
+screened.hamming.nj.pml.varr <- pml(screened.hamming.nj,
+  screened.phydat, rate = 0.1, k = 3, shape = 0.5)
+
+#Optimize the gamma MLE model
+screened.pratchet.opt.varr <- optim.pml(screened.pratchet.pml.varr,
+  optEdge = TRUE, rearrangement = "stochastic", optGamma = TRUE)
+screened.pratchet.opt.varr.rooted <- root(screened.pratchet.opt.varr$tree,
+  outgroup = albanian, resolve.root = TRUE)
+screened.hamming.upgma.opt.varr <- optim.pml(screened.hamming.upgma.pml.varr,
+  optEdge = TRUE, rearrangement = "stochastic", optGamma = TRUE)
+screened.hamming.upgma.opt.varr.rooted <- root(screened.hamming.upgma.opt.varr$tree,
+  outgroup = albanian, resolve.root = TRUE)
+screened.hamming.nj.opt.varr <- optim.pml(screened.hamming.nj.pml.varr,
+  optEdge = TRUE, rearrangement = "stochastic", optGamma = TRUE)
+screened.hamming.nj.opt.varr.rooted <- root(screened.hamming.nj.opt.varr$tree,
+  outgroup = albanian, resolve.root = TRUE)
+
+#Gamma MLE trees
+mp.ratchet.varr.tr <- ggtree(screened.pratchet.opt.varr.rooted) +
+  theme_tree() + 
+  geom_tiplab(size=3, vjust=-0.3, hjust=1) +
+  ggtitle("Gamma MLE tree starting from Pratchet") +
+  theme(text=element_text(size=5))
+upgma.varr.tr <- ggtree(screened.hamming.upgma.opt.varr.rooted) +
+  theme_tree() + 
+  geom_tiplab(size=3, vjust=-0.3, hjust=1) +
+  ggtitle("Gamma MLE tree starting from UPGMA") +
+  theme(text=element_text(size=5))
+nj.varr.tr <- ggtree(screened.hamming.nj.opt.varr.rooted) +
+  theme_tree() + 
+  geom_tiplab(size=3, vjust=-0.3, hjust=1) +
+  ggtitle("Gamma MLE tree starting from NJ") +
+  theme(text=element_text(size=5))
+```
+The first three trees here are given with the results of running bootstrap 100 times.
+R crashed when attempting this for MLE, so no bootstrap values are given for this.
+
+\textbf{Pratchet}
+
+First is our Pratchet tree.
+```{r displayPratchet, echo=TRUE}
+ggtree(screened.nni.rooted.blength) +
+   theme_tree() +
+   ggtitle("Maximum Parsimony NNI") +
+   geom_tiplab(size = 3, vjust=-.1, hjust=1) +
+   theme(text=element_text(size=5)) +
+   geom_nodelab(aes(x=branch), label=screened.pratchet.bphylo.clades,
+                vjust=-0.3, hjust=1, size=3)
+
+CI(screened.blength.nni,screened.phydat, cost = NULL, sitewise = FALSE)
+RI(screened.blength.nni,screened.phydat, cost = NULL, sitewise = FALSE)
+```
+
+\textbf{Distance-Based}
+
+Next is our UPGMA tree.
+```{r displayUPGMA, echo=TRUE}
+ggtree(screened.hamming.upgma) +
+   theme_tree() +
+   geom_tiplab(aes(x=branch), size=3,
+   vjust=-0.3,
+   hjust=.5) +
+   theme(text=element_text(size=5)) +
+   ggtitle("Hamming distance UPGMA") +
+   geom_nodelab(aes(x=branch), label=screened.hamming.upgma.bphy.clades,
+                vjust=-0.3, hjust=0.6, size=3)
+
+(cor(as.vector(as.matrix(screened.hamming)),
+   as.vector(as.matrix(cophenetic.phylo(screened.hamming.upgma)))))
+CI(screened.hamming.upgma, screened.phydat, cost = NULL, sitewise = FALSE)
+RI(screened.hamming.upgma, screened.phydat, cost = NULL, sitewise = FALSE)
+```
+
+We can compare this with the Neighbor Joining tree.
+```{r displayNJ, echo=TRUE}
+ggtree(screened.hamming.nj.rooted) +
+   theme_tree() +
+   geom_tiplab(aes(x=branch), size=3,
+   vjust=-0.3, hjust=.5) +
+   theme(text=element_text(size=5)) +
+   ggtitle("NJ tree based on Hamming distance") +
+   geom_nodelab(aes(x=branch), label=screened.hamming.nj.bphy.clades,
+                vjust=-0.3, hjust=0.6, size=3)
+
+(cor(as.vector(as.matrix(screened.hamming)),
+   as.vector(as.matrix(cophenetic.phylo(screened.hamming.nj)))))
+CI(screened.hamming.nj, screened.phydat, cost = NULL, sitewise = FALSE)
+RI(screened.hamming.nj, screened.phydat, cost = NULL, sitewise = FALSE)
+```
+
+\textbf{Maximum Likelihood Estimation}
+
+For MLE, these are the results of the simple model starting from
+each of the above trees.
+```{r displayMLE1, echo=TRUE}
+mp.ratchet.tr
+screened.pratchet.opt
+
+upgma.tr
+screened.hamming.upgma.opt
+
+nj.tr
+screened.hamming.nj.opt
+```
+
+Although it is possible to use the gamma distribution to create
+a more complicated model, the AIC values below show that the extra
+variables are not sufficiently worthwhile.
+```{r displayMLE2, echo=TRUE}
+AIC(screened.pratchet.opt)
+AIC(screened.pratchet.opt.varr)
+AIC(screened.hamming.upgma.opt)
+AIC(screened.hamming.upgma.opt.varr)
+AIC(screened.hamming.nj.opt)
+AIC(screened.hamming.nj.opt.varr)
+```
+#Conclusions
+On the whole, negation seems to be a viable category for distinguishing the Indo-European languages.  Each tree does a reasonable job of determining the lower-order clades, in part enforced by characters that should give Tocharian, Celtic, and Balto-Slavic.  Higher-order groupings are inconsistent and seem to rely primarily on whether a language uses \textit{*meh\textsubscript{2}-} or \textit{*ne-} for prohibition.  This seems to be why Greek, Armenian, Indo-Iranian, and often Tocharian are grouped together.
+
+The internal ordering of the languages does not seem reconstructable from these characters, and the order in the output varies with each run of the Pratchet algorithm, implying that many trees are optimal due to the small number of characters.  This is presumably part of the reason that Branch and Bound fails.  Combined with other character types, the results will likely be stronger.
